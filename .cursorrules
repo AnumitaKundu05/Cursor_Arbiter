@@ -1,0 +1,64 @@
+# Cursor Priority Arbiter — Project Rules
+
+## What this project is
+A **meta-agent** for Cursor's parallel-agents workflow. It does not write
+application code. It reads the outputs of N parallel worker agents and
+produces a ranked arbitration decision: ship, merge, kill, hold.
+
+When working in this repo, you are editing the arbiter itself — not using
+it. Keep that framing.
+
+## Architecture you must preserve
+
+- `arbiter/core.py`        — single source of truth for `arbitrate()`.
+                              Do NOT add code-generation logic here.
+- `arbiter/scoring.py`     — 1..10000 scoring. Weights and caps are frozen
+                              constants. If you change them, bump the
+                              version in `arbiter/__init__.py` and update
+                              `docs/SCORING.md` in the same commit.
+- `arbiter/cli.py`         — thin argparse wrapper around `arbitrate()`.
+                              Keep it stdin-friendly; people pipe into it.
+- `benchmark/`             — fixtures + runner. Fixtures are hand-labeled
+                              ground truth. Do not regenerate them with AI;
+                              that defeats the point of a benchmark.
+- `tests/`                 — offline only. No test may require the API.
+
+## Rules for edits
+
+1. **No secrets.** Never put an API key in code, tests, fixtures, or
+   commit messages. Read from env. The `.env` file is gitignored; use
+   `.env.example` as the template.
+
+2. **Scoring changes require justification.** Any PR that changes weights,
+   caps, or formulas in `scoring.py` must update `docs/SCORING.md` and add
+   a test demonstrating the new behavior. Otherwise scores across runs
+   become incomparable.
+
+3. **Preserve the baseline.** `baseline_arbitrate()` in
+   `benchmark/run_benchmark.py` simulates vanilla Cursor/Claude. Do NOT
+   add arbitration-specific prompting to it; that collapses the comparison.
+
+4. **Deterministic tests.** Tests in `tests/` must pass offline. If you
+   need integration tests against the API, put them in `tests/integration/`
+   and mark them with `@pytest.mark.integration` so CI can skip them.
+
+5. **JSON discipline.** The arbiter returns strict JSON. Do not let any
+   prose leak into the output. If the model misbehaves, fix the system
+   prompt or the parser — do not loosen the contract.
+
+## When asked to add a feature
+
+Before writing code, ask yourself:
+- Does this belong in the meta-agent, or is it a worker-agent concern?
+- Will this make the benchmark reproducible or less reproducible?
+- Does it change the scoring contract?
+
+If the answer to the third question is yes, surface it explicitly in the
+PR description.
+
+## Style
+
+- Python 3.10+, type hints where useful (this codebase uses `from __future__
+  import annotations`).
+- No heavy dependencies beyond `anthropic` and `pytest`.
+- Docstrings on public functions. Short, honest, no marketing prose.
